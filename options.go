@@ -4,7 +4,7 @@ import "fmt"
 
 type Option[T any] func(*Pager[T]) error
 
-func WithNexPageNum[T any](page uint) Option[T] {
+func WithNexPageNum[T any](page int) Option[T] {
 	return func(p *Pager[T]) error {
 		if page <= 0 {
 			return fmt.Errorf("next page number must be positive")
@@ -14,7 +14,7 @@ func WithNexPageNum[T any](page uint) Option[T] {
 	}
 }
 
-func WithPageSize[T any](pageSize uint) Option[T] {
+func WithPageSize[T any](pageSize int) Option[T] {
 	return func(p *Pager[T]) error {
 		if pageSize <= 0 {
 			return fmt.Errorf("page size must be positive")
@@ -24,7 +24,7 @@ func WithPageSize[T any](pageSize uint) Option[T] {
 	}
 }
 
-func WithTotalPages[T any](pagesCount uint) Option[T] {
+func WithTotalPagesCount[T any](pagesCount int) Option[T] {
 	return func(p *Pager[T]) error {
 		if pagesCount <= 0 {
 			return fmt.Errorf("total pages count must be positive")
@@ -41,9 +41,9 @@ func WithNextPageLoader[T any](loader Loader[T]) Option[T] {
 	}
 }
 
-func WithNextPageWithNewTotalLoader[T any](loader NewTotalLoader[T]) Option[T] {
+func WithNextPageLoaderWithNewTotal[T any](loader LoaderWithNewTotal[T]) Option[T] {
 	return func(p *Pager[T]) error {
-		p.nextPageWithNewTotalLoader = loader
+		p.nextPageLoaderWithNewTotalCount = loader
 		return nil
 	}
 }
