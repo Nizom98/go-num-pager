@@ -33,3 +33,17 @@ func WithTotalPages[T any](pagesCount uint) Option[T] {
 		return nil
 	}
 }
+
+func WithNextPageLoader[T any](loader Loader[T]) Option[T] {
+	return func(p *Pager[T]) error {
+		p.nextPageLoader = loader
+		return nil
+	}
+}
+
+func WithNextPageWithNewTotalLoader[T any](loader NewTotalLoader[T]) Option[T] {
+	return func(p *Pager[T]) error {
+		p.nextPageWithNewTotalLoader = loader
+		return nil
+	}
+}
