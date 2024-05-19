@@ -34,15 +34,17 @@ type (
 		nextPageNum int
 		// loader that loads the next page of elements.
 		// nextPageLoader or nextPageLoaderWithNewTotalCount must be set.
-		// If you know the total pages count, set nextPageLoader value.
 		nextPageLoader Loader[T]
 		// loader that loads the next page of elements and returns the new total count of elements.
 		// nextPageLoaderWithNewTotalCount or nextPageLoader must be set.
-		// If you do not know the total pages count, set nextPageLoaderWithNewTotalCount value.
 		nextPageLoaderWithNewTotalCount LoaderWithNewTotal[T]
 	}
 )
 
+// New creates a new Pager.
+// It requires at least one option: WithLoader or WithLoaderWithNewTotal.
+// If you do not know the total pages count, use WithLoaderWithNewTotal.
+// If you know the total pages count, use WithLoader.
 func New[T any](opts ...Option[T]) (*Pager[T], error) {
 	pager := &Pager[T]{
 		pageSize:        defaultPageSize,
@@ -67,7 +69,7 @@ func New[T any](opts ...Option[T]) (*Pager[T], error) {
 }
 
 // Next returns the next page of elements.
-// It uses LoaderWithNewTotal if it is set, otherwise it uses Loader.
+// It uses LoaderWithNewTotal if it is set, otherwise it uses Loader to load data.
 func (p *Pager[T]) Next(ctx context.Context) ([]T, error) {
 	if p.nextPageLoaderWithNewTotalCount != nil {
 		return p.nextWithNewTotal(ctx)

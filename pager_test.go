@@ -3,8 +3,9 @@ package page
 import (
 	"context"
 	"errors"
-	"go.uber.org/mock/gomock"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 
 	"github.com/stretchr/testify/require"
 )
@@ -78,6 +79,8 @@ func TestTotalCountToTotalPagesCount(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	loader := NewMockLoader[int](ctrl)
 	newTotalLoader := NewMockLoaderWithNewTotal[int](ctrl)
 
@@ -198,6 +201,7 @@ func TestNew(t *testing.T) {
 
 func TestPager_Next_Loader(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	cases := []struct {
 		name    string
@@ -277,6 +281,7 @@ func TestPager_Next_Loader(t *testing.T) {
 
 func TestPager_Next_LoaderWithNewTotal(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	cases := []struct {
 		name                string
@@ -375,4 +380,122 @@ func TestPager_Next_LoaderWithNewTotal(t *testing.T) {
 			require.Equal(t, tc.wantTotalPagesCount, pager.totalPagesCount)
 		})
 	}
+}
+
+func TestPager_All(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cases := []struct {
+		name    string
+		loader  func() Loader[int]
+		opts    []Option[int]
+		want    []int
+		wantErr require.ErrorAssertionFunc
+	}{
+		{
+			name: "get 3 pages",
+			loader: func() Loader[int] {
+				loader := &fakeLoader{
+					pageByNum: map[int][]int{
+						1: {1, 2, 3},
+						2: {4, 5, 6},
+						3: {7, 8},
+					},
+				}
+				return loader
+			},
+			opts: []Option[int]{
+				WithPageSize[int](3),
+				WithTotalPagesCount[int](3),
+			},
+			want:    []int{1, 2, 3, 4, 5, 6, 7, 8},
+			wantErr: require.NoError,
+		},
+		{
+			name: "get 2 pages, an error at the third page",
+			loader: func() Loader[int] {
+				loader := &fakeLoader{
+					pageByNum: map[int][]int{
+						1: {1, 2, 3},
+						2: {4, 5, 6},
+						3: {7, 8},
+					},
+					errOnPageNum: 3,
+				}
+				return loader
+			},
+			opts: []Option[int]{
+				WithPageSize[int](3),
+				WithTotalPagesCount[int](3),
+			},
+			want: []int{1, 2, 3, 4, 5, 6},
+			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
+				require.EqualError(t, err, "page 3: test error")
+			},
+		},
+		{
+			name: "get 1 page, an error at the second page",
+			loader: func() Loader[int] {
+				loader := &fakeLoader{
+					pageByNum: map[int][]int{
+						1: {1, 2, 3},
+						2: {4, 5, 6},
+						3: {7, 8},
+					},
+					errOnPageNum: 2,
+				}
+				return loader
+			},
+			opts: []Option[int]{
+				WithPageSize[int](3),
+				WithTotalPagesCount[int](3),
+			},
+			want: []int{1, 2, 3},
+			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
+				require.EqualError(t, err, "page 2: test error")
+			},
+		},
+		{
+			name: "nothing to load, must call loader 3 times",
+			loader: func() Loader[int] {
+				loader := NewMockLoader[int](ctrl)
+				loader.EXPECT().
+					Load(gomock.Any(), gomock.AnyOf(1, 2, 3), 3).
+					Times(3).
+					Return([]int{}, nil)
+				return loader
+			},
+			opts: []Option[int]{
+				WithPageSize[int](3),
+				WithTotalPagesCount[int](3),
+			},
+			want:    []int{},
+			wantErr: require.NoError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.opts = append(tc.opts, WithNextPageLoader[int](tc.loader()))
+			pager, err := New[int](tc.opts...)
+			require.NoError(t, err)
+
+			got, err := pager.All(context.Background())
+			tc.wantErr(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+type fakeLoader struct {
+	pageByNum    map[int][]int
+	errOnPageNum int
+}
+
+func (l *fakeLoader) Load(_ context.Context, pageNum, _ int) (page []int, err error) {
+	if l.errOnPageNum == pageNum {
+		return nil, errors.New("test error")
+	}
+	return l.pageByNum[pageNum], nil
 }
