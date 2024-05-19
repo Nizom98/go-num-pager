@@ -40,18 +40,18 @@ func (m *MockLoader[T]) EXPECT() *MockLoaderMockRecorder[T] {
 }
 
 // Load mocks base method.
-func (m *MockLoader[T]) Load(ctx context.Context, pageNum, pageSize int) ([]T, error) {
+func (m *MockLoader[T]) Load(ctx context.Context, pageStartAt, pageSize int) ([]T, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Load", ctx, pageNum, pageSize)
+	ret := m.ctrl.Call(m, "Load", ctx, pageStartAt, pageSize)
 	ret0, _ := ret[0].([]T)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Load indicates an expected call of Load.
-func (mr *MockLoaderMockRecorder[T]) Load(ctx, pageNum, pageSize any) *gomock.Call {
+func (mr *MockLoaderMockRecorder[T]) Load(ctx, pageStartAt, pageSize any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockLoader[T])(nil).Load), ctx, pageNum, pageSize)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockLoader[T])(nil).Load), ctx, pageStartAt, pageSize)
 }
 
 // MockLoaderWithNewTotal is a mock of LoaderWithNewTotal interface.
@@ -78,9 +78,9 @@ func (m *MockLoaderWithNewTotal[T]) EXPECT() *MockLoaderWithNewTotalMockRecorder
 }
 
 // Load mocks base method.
-func (m *MockLoaderWithNewTotal[T]) Load(ctx context.Context, pageNum, pageSize int) ([]T, int, error) {
+func (m *MockLoaderWithNewTotal[T]) Load(ctx context.Context, pageStartAt, pageSize int) ([]T, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Load", ctx, pageNum, pageSize)
+	ret := m.ctrl.Call(m, "Load", ctx, pageStartAt, pageSize)
 	ret0, _ := ret[0].([]T)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -88,7 +88,7 @@ func (m *MockLoaderWithNewTotal[T]) Load(ctx context.Context, pageNum, pageSize 
 }
 
 // Load indicates an expected call of Load.
-func (mr *MockLoaderWithNewTotalMockRecorder[T]) Load(ctx, pageNum, pageSize any) *gomock.Call {
+func (mr *MockLoaderWithNewTotalMockRecorder[T]) Load(ctx, pageStartAt, pageSize any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockLoaderWithNewTotal[T])(nil).Load), ctx, pageNum, pageSize)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockLoaderWithNewTotal[T])(nil).Load), ctx, pageStartAt, pageSize)
 }

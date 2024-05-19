@@ -4,12 +4,12 @@ import "fmt"
 
 type Option[T any] func(*Pager[T]) error
 
-func WithNexPageNum[T any](page int) Option[T] {
+func WithNextPageStartAt[T any](startAt int) Option[T] {
 	return func(p *Pager[T]) error {
-		if page <= 0 {
-			return fmt.Errorf("next page number must be positive")
+		if startAt < 0 {
+			return fmt.Errorf("next page start position must not be negative")
 		}
-		p.nextPageNum = page
+		p.nextPageStartAt = startAt
 		return nil
 	}
 }
@@ -24,12 +24,12 @@ func WithPageSize[T any](pageSize int) Option[T] {
 	}
 }
 
-func WithTotalPagesCount[T any](pagesCount int) Option[T] {
+func WithTotalCount[T any](totalCount int) Option[T] {
 	return func(p *Pager[T]) error {
-		if pagesCount <= 0 {
-			return fmt.Errorf("total pages count must be positive")
+		if totalCount <= 0 {
+			return fmt.Errorf("total count must be positive")
 		}
-		p.totalPagesCount = pagesCount
+		p.totalCount = totalCount
 		return nil
 	}
 }

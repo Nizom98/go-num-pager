@@ -1,6 +1,6 @@
 # Number pager
 
-Go-Num-Pager is a paginator client library for Go.
+Go-Num-Pager is a paginator library for Go.
 It helps you to paginate your data in a simple way.
 
 
@@ -26,7 +26,8 @@ func main() {
 	myLoader := &MyLoader{}
 
 	pager, err := page.New[int](
-		page.WithTotalPagesCount[int](10),
+		page.WithPageSize[int](20),
+		page.WithTotalCount[int](100),
 		page.WithNextPageLoader[int](myLoader),
 	)
 	if err != nil {

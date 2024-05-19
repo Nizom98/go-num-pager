@@ -8,18 +8,18 @@ import (
 //go:generate mockgen -source=pager.go -destination mocks_world_test.go -package page
 
 const (
-	defaultNextPageNum     = 1
-	defaultTotalPagesCount = 1
+	defaultNextPageStartAt = 0
+	defaultTotalCount      = 1
 	defaultPageSize        = 100
 )
 
 type (
 	Loader[T any] interface {
-		Load(ctx context.Context, pageNum, pageSize int) (page []T, err error)
+		Load(ctx context.Context, pageStartAt, pageSize int) (page []T, err error)
 	}
 
 	LoaderWithNewTotal[T any] interface {
-		Load(ctx context.Context, pageNum, pageSize int) (page []T, newTotalCount int, err error)
+		Load(ctx context.Context, pageStartAt, pageSize int) (page []T, newTotalCount int, err error)
 	}
 
 	Pager[T any] struct {
@@ -28,10 +28,11 @@ type (
 		// total pages count.
 		// If the nextPageLoaderWithNewTotalCount is set,
 		// this value will be updated after each call of nextPageLoaderWithNewTotalCount.
-		totalPagesCount int
+		// 1, 2, 3, ...
+		totalCount int
 		// next page number, that will be loaded in next call of Next.
-		// 1, 2, 3, ..., totalPagesCount.
-		nextPageNum int
+		// 0, 1, 2, ..., totalCount - 1.
+		nextPageStartAt int
 		// loader that loads the next page of elements.
 		// nextPageLoader or nextPageLoaderWithNewTotalCount must be set.
 		nextPageLoader Loader[T]
@@ -48,8 +49,8 @@ type (
 func New[T any](opts ...Option[T]) (*Pager[T], error) {
 	pager := &Pager[T]{
 		pageSize:        defaultPageSize,
-		totalPagesCount: defaultTotalPagesCount,
-		nextPageNum:     defaultNextPageNum,
+		totalCount:      defaultTotalCount,
+		nextPageStartAt: defaultNextPageStartAt,
 	}
 
 	for _, opt := range opts {
@@ -61,8 +62,8 @@ func New[T any](opts ...Option[T]) (*Pager[T], error) {
 	if pager.nextPageLoader == nil && pager.nextPageLoaderWithNewTotalCount == nil {
 		return nil, fmt.Errorf("next page loader is required")
 	}
-	if pager.nextPageNum > pager.totalPagesCount {
-		return nil, fmt.Errorf("next page number must be less or equal to total pages count")
+	if pager.nextPageStartAt >= pager.totalCount {
+		return nil, fmt.Errorf("next page start position must be less than total count")
 	}
 
 	return pager, nil
@@ -79,11 +80,11 @@ func (p *Pager[T]) Next(ctx context.Context) ([]T, error) {
 		return nil, nil
 	}
 
-	page, err := p.nextPageLoader.Load(ctx, p.nextPageNum, p.pageSize)
+	page, err := p.nextPageLoader.Load(ctx, p.nextPageStartAt, p.pageSize)
 	if err != nil {
-		return nil, fmt.Errorf("page %d: %w", p.nextPageNum, err)
+		return nil, fmt.Errorf("page start at %d: %w", p.nextPageStartAt, err)
 	}
-	p.nextPageNum++
+	p.nextPageStartAt += p.pageSize
 	return page, nil
 }
 
@@ -94,18 +95,18 @@ func (p *Pager[T]) nextWithNewTotal(ctx context.Context) ([]T, error) {
 		return nil, nil
 	}
 
-	page, newTotal, err := p.nextPageLoaderWithNewTotalCount.Load(ctx, p.nextPageNum, p.pageSize)
+	page, newTotal, err := p.nextPageLoaderWithNewTotalCount.Load(ctx, p.nextPageStartAt, p.pageSize)
 	if err != nil {
-		return nil, fmt.Errorf("page %d: %w", p.nextPageNum, err)
+		return nil, fmt.Errorf("page start at %d: %w", p.nextPageStartAt, err)
 	}
-	p.nextPageNum++
-	p.totalPagesCount = TotalCountToTotalPagesCount(newTotal, p.pageSize)
+	p.nextPageStartAt += p.pageSize
+	p.totalCount = newTotal
 	return page, nil
 }
 
 // All returns all elements from all pages.
 func (p *Pager[T]) All(ctx context.Context) ([]T, error) {
-	allPages := make([]T, 0, p.totalPagesCount*p.pageSize)
+	allPages := make([]T, 0, p.totalCount*p.pageSize)
 	for !p.IsAllLoaded() {
 		page, err := p.Next(ctx)
 		if err != nil {
@@ -117,13 +118,5 @@ func (p *Pager[T]) All(ctx context.Context) ([]T, error) {
 }
 
 func (p *Pager[T]) IsAllLoaded() bool {
-	return p.nextPageNum > p.totalPagesCount
-}
-
-// TotalCountToTotalPagesCount calculates the total pages count by total count and page size.
-func TotalCountToTotalPagesCount(totalCount, pageSize int) int {
-	if pageSize == 0 {
-		return 0
-	}
-	return (totalCount + pageSize - 1) / pageSize
+	return p.nextPageStartAt >= p.totalCount
 }

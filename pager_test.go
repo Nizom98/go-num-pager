@@ -10,73 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTotalCountToTotalPagesCount(t *testing.T) {
-	cases := []struct {
-		name       string
-		totalCount int
-		pageSize   int
-		want       int
-	}{
-		{
-			name:       "zero total count and zero page size",
-			totalCount: 0,
-			pageSize:   0,
-			want:       0,
-		},
-		{
-			name:       "100 total count and 100 page size",
-			totalCount: 100,
-			pageSize:   100,
-			want:       1,
-		},
-		{
-			name:       "100 total count and 99 page size",
-			totalCount: 100,
-			pageSize:   99,
-			want:       2,
-		},
-		{
-			name:       "99 total count and 100 page size",
-			totalCount: 99,
-			pageSize:   100,
-			want:       1,
-		},
-		{
-			name:       "1 total count and 100 page size",
-			totalCount: 1,
-			pageSize:   100,
-			want:       1,
-		},
-		{
-			name:       "100 total count and 1 page size",
-			totalCount: 100,
-			pageSize:   1,
-			want:       100,
-		},
-		{
-			name:       "100 total count and 2 page size",
-			totalCount: 100,
-			pageSize:   2,
-			want:       50,
-		},
-		{
-			name:       "100 total count and 3 page size",
-			totalCount: 100,
-			pageSize:   3,
-			want:       34,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t,
-				tc.want,
-				TotalCountToTotalPagesCount(tc.totalCount, tc.pageSize),
-			)
-		})
-	}
-}
-
 func TestNew(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -97,8 +30,8 @@ func TestNew(t *testing.T) {
 			},
 			want: &Pager[int]{
 				pageSize:        defaultPageSize,
-				totalPagesCount: defaultTotalPagesCount,
-				nextPageNum:     defaultNextPageNum,
+				totalCount:      defaultTotalCount,
+				nextPageStartAt: defaultNextPageStartAt,
 				nextPageLoader:  loader,
 			},
 			wantErr: require.NoError,
@@ -110,8 +43,8 @@ func TestNew(t *testing.T) {
 			},
 			want: &Pager[int]{
 				pageSize:                        defaultPageSize,
-				totalPagesCount:                 defaultTotalPagesCount,
-				nextPageNum:                     defaultNextPageNum,
+				totalCount:                      defaultTotalCount,
+				nextPageStartAt:                 defaultNextPageStartAt,
 				nextPageLoaderWithNewTotalCount: newTotalLoader,
 			},
 			wantErr: require.NoError,
@@ -120,40 +53,56 @@ func TestNew(t *testing.T) {
 			name: "custom options",
 			opts: []Option[int]{
 				WithNextPageLoaderWithNewTotal[int](newTotalLoader),
-				WithNexPageNum[int](9),
-				WithTotalPagesCount[int](99),
+				WithNextPageStartAt[int](9),
+				WithTotalCount[int](99),
 				WithPageSize[int](999),
 			},
 			want: &Pager[int]{
 				pageSize:                        999,
-				totalPagesCount:                 99,
-				nextPageNum:                     9,
+				totalCount:                      99,
+				nextPageStartAt:                 9,
 				nextPageLoaderWithNewTotalCount: newTotalLoader,
 			},
 			wantErr: require.NoError,
 		},
 		{
-			name: "invalid next page number",
+			name: "zero nextPageStartAt",
 			opts: []Option[int]{
 				WithNextPageLoaderWithNewTotal[int](newTotalLoader),
-				WithNexPageNum[int](0),
-				WithTotalPagesCount[int](99),
+				WithNextPageStartAt[int](0),
+				WithTotalCount[int](99),
+				WithPageSize[int](999),
+			},
+			want: &Pager[int]{
+				pageSize:                        999,
+				totalCount:                      99,
+				nextPageStartAt:                 0,
+				nextPageLoaderWithNewTotalCount: newTotalLoader,
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "invalid nextPageStartAt",
+			opts: []Option[int]{
+				WithNextPageLoaderWithNewTotal[int](newTotalLoader),
+				WithNextPageStartAt[int](-1),
+				WithTotalCount[int](99),
 				WithPageSize[int](999),
 			},
 			want: nil,
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
-				require.EqualError(t, err, "next page number must be positive")
+				require.EqualError(t, err, "next page start position must not be negative")
 			},
 		},
 		{
 			name: "invalid total pages count",
 			opts: []Option[int]{
 				WithNextPageLoaderWithNewTotal[int](newTotalLoader),
-				WithTotalPagesCount[int](0),
+				WithTotalCount[int](0),
 			},
 			want: nil,
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
-				require.EqualError(t, err, "total pages count must be positive")
+				require.EqualError(t, err, "total count must be positive")
 			},
 		},
 		{
@@ -175,17 +124,16 @@ func TestNew(t *testing.T) {
 				require.EqualError(t, err, "next page loader is required")
 			},
 		},
-
 		{
 			name: "next page number is greater than total pages count",
 			opts: []Option[int]{
 				WithNextPageLoaderWithNewTotal[int](newTotalLoader),
-				WithNexPageNum[int](2),
-				WithTotalPagesCount[int](1),
+				WithNextPageStartAt[int](2),
+				WithTotalCount[int](1),
 			},
 			want: nil,
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
-				require.EqualError(t, err, "next page number must be less or equal to total pages count")
+				require.EqualError(t, err, "next page start position must be less than total count")
 			},
 		},
 	}
@@ -215,7 +163,7 @@ func TestPager_Next_Loader(t *testing.T) {
 			loader: func() Loader[int] {
 				loader := NewMockLoader[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), defaultNextPageNum, defaultPageSize).
+					Load(gomock.Any(), defaultNextPageStartAt, defaultPageSize).
 					Times(1).
 					Return([]int{1, 2, 3}, nil)
 				return loader
@@ -227,7 +175,10 @@ func TestPager_Next_Loader(t *testing.T) {
 			name: "loader returned empty page",
 			loader: func() Loader[int] {
 				loader := NewMockLoader[int](ctrl)
-				loader.EXPECT().Load(gomock.Any(), defaultNextPageNum, defaultPageSize).Return([]int{}, nil)
+				loader.EXPECT().
+					Load(gomock.Any(), defaultNextPageStartAt, defaultPageSize).
+					Times(1).
+					Return([]int{}, nil)
 				return loader
 			},
 			want:    []int{},
@@ -238,28 +189,28 @@ func TestPager_Next_Loader(t *testing.T) {
 			loader: func() Loader[int] {
 				loader := NewMockLoader[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), defaultNextPageNum, defaultPageSize).
+					Load(gomock.Any(), defaultNextPageStartAt, defaultPageSize).
 					Times(1).
 					Return(nil, errors.New("test error"))
 				return loader
 			},
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
-				require.EqualError(t, err, "page 1: test error")
+				require.EqualError(t, err, "page start at 0: test error")
 			},
 		},
 		{
-			name: "start from the second page",
+			name: "start from 1",
 			loader: func() Loader[int] {
 				loader := NewMockLoader[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), 2, defaultPageSize).
+					Load(gomock.Any(), 1, defaultPageSize).
 					Times(1).
 					Return([]int{3, 4}, nil)
 				return loader
 			},
 			opts: []Option[int]{
-				WithNexPageNum[int](2),
-				WithTotalPagesCount[int](2),
+				WithNextPageStartAt[int](1),
+				WithTotalCount[int](2),
 			},
 			want:    []int{3, 4},
 			wantErr: require.NoError,
@@ -284,87 +235,84 @@ func TestPager_Next_LoaderWithNewTotal(t *testing.T) {
 	defer ctrl.Finish()
 
 	cases := []struct {
-		name                string
-		loader              func() LoaderWithNewTotal[int]
-		opts                []Option[int]
-		want                []int
-		wantTotalPagesCount int
-		wantErr             require.ErrorAssertionFunc
+		name           string
+		loader         func() LoaderWithNewTotal[int]
+		opts           []Option[int]
+		want           []int
+		wantTotalCount int
+		wantErr        require.ErrorAssertionFunc
 	}{
 		{
 			name: "all ok, default options",
 			loader: func() LoaderWithNewTotal[int] {
 				loader := NewMockLoaderWithNewTotal[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), 1, 100).
+					Load(gomock.Any(), 0, 100).
 					Times(1).
-					Return([]int{1, 2, 3}, 1, nil)
+					Return([]int{1, 2, 3}, 3, nil)
 				return loader
 			},
-			want:                []int{1, 2, 3},
-			wantTotalPagesCount: 1,
-			wantErr:             require.NoError,
+			want:           []int{1, 2, 3},
+			wantTotalCount: 3,
+			wantErr:        require.NoError,
 		},
 		{
 			name: "got 0 total count",
 			loader: func() LoaderWithNewTotal[int] {
 				loader := NewMockLoaderWithNewTotal[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), 1, 100).
+					Load(gomock.Any(), 0, 100).
 					Times(1).
 					Return([]int{1, 2, 3}, 0, nil)
 				return loader
 			},
-			want:                []int{1, 2, 3},
-			wantTotalPagesCount: 0,
-			wantErr:             require.NoError,
+			want:           []int{1, 2, 3},
+			wantTotalCount: 0,
+			wantErr:        require.NoError,
 		},
 		{
 			name: "loader returned empty page",
 			loader: func() LoaderWithNewTotal[int] {
 				loader := NewMockLoaderWithNewTotal[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), 1, 100).
+					Load(gomock.Any(), 0, 100).
 					Times(1).
 					Return([]int{}, 101, nil)
 				return loader
 			},
-			want:                []int{},
-			wantTotalPagesCount: 2,
-			wantErr:             require.NoError,
+			want:           []int{},
+			wantTotalCount: 101,
+			wantErr:        require.NoError,
 		},
 		{
 			name: "loader returned an error",
 			loader: func() LoaderWithNewTotal[int] {
 				loader := NewMockLoaderWithNewTotal[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), 1, 100).
+					Load(gomock.Any(), 0, 100).
 					Times(1).
 					Return(nil, 0, errors.New("test error"))
 				return loader
 			},
-			wantTotalPagesCount: 1, // should not be updated
+			wantTotalCount: 1, // should not be updated
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
-				require.EqualError(t, err, "page 1: test error")
+				require.EqualError(t, err, "page start at 0: test error")
 			},
 		},
 		{
-			name: "start from the second page",
+			name: "start from 0",
 			loader: func() LoaderWithNewTotal[int] {
 				loader := NewMockLoaderWithNewTotal[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), 2, 100).
+					Load(gomock.Any(), 0, 100).
 					Times(1).
 					Return([]int{5, 6}, 101, nil)
 				return loader
 			},
-			opts: []Option[int]{
-				WithNexPageNum[int](2),
-				WithTotalPagesCount[int](2),
-			},
-			want:                []int{5, 6},
-			wantTotalPagesCount: 2,
-			wantErr:             require.NoError,
+			opts:           nil,
+			want:           []int{5, 6},
+			wantTotalCount: 101,
+			wantErr:        require.NoError,
 		},
 	}
 
@@ -377,7 +325,7 @@ func TestPager_Next_LoaderWithNewTotal(t *testing.T) {
 			got, err := pager.Next(context.Background())
 			tc.wantErr(t, err)
 			require.Equal(t, tc.want, got)
-			require.Equal(t, tc.wantTotalPagesCount, pager.totalPagesCount)
+			require.Equal(t, tc.wantTotalCount, pager.totalCount)
 		})
 	}
 }
@@ -397,17 +345,18 @@ func TestPager_All(t *testing.T) {
 			name: "get 3 pages",
 			loader: func() Loader[int] {
 				loader := &fakeLoader{
-					pageByNum: map[int][]int{
-						1: {1, 2, 3},
-						2: {4, 5, 6},
-						3: {7, 8},
+					pageByStartAt: map[int][]int{
+						0: {1, 2, 3},
+						3: {4, 5, 6},
+						6: {7, 8},
 					},
+					errOnPageStartAt: -1, // no error
 				}
 				return loader
 			},
 			opts: []Option[int]{
 				WithPageSize[int](3),
-				WithTotalPagesCount[int](3),
+				WithTotalCount[int](8),
 			},
 			want:    []int{1, 2, 3, 4, 5, 6, 7, 8},
 			wantErr: require.NoError,
@@ -416,44 +365,44 @@ func TestPager_All(t *testing.T) {
 			name: "get 2 pages, an error at the third page",
 			loader: func() Loader[int] {
 				loader := &fakeLoader{
-					pageByNum: map[int][]int{
-						1: {1, 2, 3},
-						2: {4, 5, 6},
-						3: {7, 8},
+					pageByStartAt: map[int][]int{
+						0: {1, 2, 3},
+						3: {4, 5, 6},
+						6: {7, 8},
 					},
-					errOnPageNum: 3,
+					errOnPageStartAt: 6,
 				}
 				return loader
 			},
 			opts: []Option[int]{
 				WithPageSize[int](3),
-				WithTotalPagesCount[int](3),
+				WithTotalCount[int](8),
 			},
 			want: []int{1, 2, 3, 4, 5, 6},
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
-				require.EqualError(t, err, "page 3: test error")
+				require.EqualError(t, err, "page start at 6: test error")
 			},
 		},
 		{
 			name: "get 1 page, an error at the second page",
 			loader: func() Loader[int] {
 				loader := &fakeLoader{
-					pageByNum: map[int][]int{
-						1: {1, 2, 3},
-						2: {4, 5, 6},
-						3: {7, 8},
+					pageByStartAt: map[int][]int{
+						0: {1, 2, 3},
+						3: {4, 5, 6},
+						6: {7, 8},
 					},
-					errOnPageNum: 2,
+					errOnPageStartAt: 3,
 				}
 				return loader
 			},
 			opts: []Option[int]{
 				WithPageSize[int](3),
-				WithTotalPagesCount[int](3),
+				WithTotalCount[int](8),
 			},
 			want: []int{1, 2, 3},
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
-				require.EqualError(t, err, "page 2: test error")
+				require.EqualError(t, err, "page start at 3: test error")
 			},
 		},
 		{
@@ -461,14 +410,14 @@ func TestPager_All(t *testing.T) {
 			loader: func() Loader[int] {
 				loader := NewMockLoader[int](ctrl)
 				loader.EXPECT().
-					Load(gomock.Any(), gomock.AnyOf(1, 2, 3), 3).
+					Load(gomock.Any(), gomock.AnyOf(0, 3, 6), 3).
 					Times(3).
 					Return([]int{}, nil)
 				return loader
 			},
 			opts: []Option[int]{
 				WithPageSize[int](3),
-				WithTotalPagesCount[int](3),
+				WithTotalCount[int](8),
 			},
 			want:    []int{},
 			wantErr: require.NoError,
@@ -489,13 +438,13 @@ func TestPager_All(t *testing.T) {
 }
 
 type fakeLoader struct {
-	pageByNum    map[int][]int
-	errOnPageNum int
+	pageByStartAt    map[int][]int
+	errOnPageStartAt int
 }
 
-func (l *fakeLoader) Load(_ context.Context, pageNum, _ int) (page []int, err error) {
-	if l.errOnPageNum == pageNum {
+func (l *fakeLoader) Load(_ context.Context, pageStartAt, _ int) (page []int, err error) {
+	if l.errOnPageStartAt == pageStartAt {
 		return nil, errors.New("test error")
 	}
-	return l.pageByNum[pageNum], nil
+	return l.pageByStartAt[pageStartAt], nil
 }
