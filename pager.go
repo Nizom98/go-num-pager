@@ -25,12 +25,12 @@ type (
 	Pager[T any] struct {
 		// elements count per page.
 		pageSize int
-		// total pages count.
+		// total elements count from all pages.
 		// If the nextPageLoaderWithNewTotalCount is set,
 		// this value will be updated after each call of nextPageLoaderWithNewTotalCount.
 		// 1, 2, 3, ...
 		totalCount int
-		// next page number, that will be loaded in next call of Next.
+		// next page start position, that will be loaded in next call of Next.
 		// 0, 1, 2, ..., totalCount - 1.
 		nextPageStartAt int
 		// loader that loads the next page of elements.
