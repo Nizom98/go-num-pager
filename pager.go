@@ -15,7 +15,7 @@ const (
 
 type (
 	Loader[T any] interface {
-		Load(ctx context.Context, pageNum, pageSize int) ([]T, error)
+		Load(ctx context.Context, pageNum, pageSize int) (page []T, err error)
 	}
 
 	LoaderWithNewTotal[T any] interface {
@@ -23,12 +23,13 @@ type (
 	}
 
 	Pager[T any] struct {
-		// elements count per page, must be positive.
+		// elements count per page.
 		pageSize int
 		// total pages count.
-		// If the LoaderWithNewTotal is set, this value will be updated after each call of LoaderWithNewTotal.
+		// If the nextPageLoaderWithNewTotalCount is set,
+		// this value will be updated after each call of nextPageLoaderWithNewTotalCount.
 		totalPagesCount int
-		// next page number, that will be loaded in next call of Next or NextWithNewTotal.
+		// next page number, that will be loaded in next call of Next.
 		// 1, 2, 3, ..., totalPagesCount.
 		nextPageNum int
 		// loader that loads the next page of elements.
@@ -44,12 +45,11 @@ type (
 
 func New[T any](opts ...Option[T]) (*Pager[T], error) {
 	pager := &Pager[T]{
-		pageSize:                        defaultPageSize,
-		totalPagesCount:                 defaultTotalPagesCount,
-		nextPageNum:                     defaultNextPageNum,
-		nextPageLoader:                  nil,
-		nextPageLoaderWithNewTotalCount: nil,
+		pageSize:        defaultPageSize,
+		totalPagesCount: defaultTotalPagesCount,
+		nextPageNum:     defaultNextPageNum,
 	}
+
 	for _, opt := range opts {
 		if err := opt(pager); err != nil {
 			return nil, err
@@ -73,8 +73,7 @@ func (p *Pager[T]) Next(ctx context.Context) ([]T, error) {
 		return p.nextWithNewTotal(ctx)
 	}
 
-	isAllPagesAlreadyLoaded := p.nextPageNum > p.totalPagesCount
-	if isAllPagesAlreadyLoaded {
+	if p.IsAllLoaded() {
 		return nil, nil
 	}
 
@@ -86,28 +85,10 @@ func (p *Pager[T]) Next(ctx context.Context) ([]T, error) {
 	return page, nil
 }
 
-// All returns all elements from all pages.
-// It uses Pager.Next method to load all pages.
-func (p *Pager[T]) All(ctx context.Context) ([]T, error) {
-	allPages := make([]T, 0, p.totalPagesCount*p.pageSize)
-	for {
-		page, err := p.Next(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(page) == 0 {
-			break
-		}
-		allPages = append(allPages, page...)
-	}
-	return allPages, nil
-}
-
 // nextWithNewTotal returns the next page of elements.
-// Use this method if you set LoaderWithNewTotal value in New.
+// It uses LoaderWithNewTotal loader to load page data.
 func (p *Pager[T]) nextWithNewTotal(ctx context.Context) ([]T, error) {
-	isAllPagesAlreadyLoaded := p.nextPageNum > p.totalPagesCount
-	if isAllPagesAlreadyLoaded {
+	if p.IsAllLoaded() {
 		return nil, nil
 	}
 
@@ -120,6 +101,24 @@ func (p *Pager[T]) nextWithNewTotal(ctx context.Context) ([]T, error) {
 	return page, nil
 }
 
+// All returns all elements from all pages.
+func (p *Pager[T]) All(ctx context.Context) ([]T, error) {
+	allPages := make([]T, 0, p.totalPagesCount*p.pageSize)
+	for !p.IsAllLoaded() {
+		page, err := p.Next(ctx)
+		if err != nil {
+			return allPages, err
+		}
+		allPages = append(allPages, page...)
+	}
+	return allPages, nil
+}
+
+func (p *Pager[T]) IsAllLoaded() bool {
+	return p.nextPageNum > p.totalPagesCount
+}
+
+// TotalCountToTotalPagesCount calculates the total pages count by total count and page size.
 func TotalCountToTotalPagesCount(totalCount, pageSize int) int {
 	if pageSize == 0 {
 		return 0
