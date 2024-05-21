@@ -36,6 +36,9 @@ func WithTotalCount[T any](totalCount int) Option[T] {
 
 func WithNextPageLoader[T any](loader Loader[T]) Option[T] {
 	return func(p *Pager[T]) error {
+		if loader == nil {
+			return fmt.Errorf("next page loader is required")
+		}
 		p.nextPageLoader = loader
 		return nil
 	}
@@ -43,6 +46,9 @@ func WithNextPageLoader[T any](loader Loader[T]) Option[T] {
 
 func WithNextPageLoaderWithNewTotal[T any](loader LoaderWithNewTotal[T]) Option[T] {
 	return func(p *Pager[T]) error {
+		if loader == nil {
+			return fmt.Errorf("next page loader with new total count is required")
+		}
 		p.nextPageLoaderWithNewTotalCount = loader
 		return nil
 	}
