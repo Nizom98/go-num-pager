@@ -17,7 +17,6 @@ func main() {
 	myLoader := &MyLoader{}
 
 	pager, _ := page.New[int](
-		page.WithPageSize[int](20),
 		page.WithTotalCount[int](100),
 		page.WithNextPageLoader[int](myLoader),
 	)
@@ -47,8 +46,6 @@ func main() {
 	myLoader := &MyLoader{}
 
 	pager, _ := page.New[int](
-		page.WithPageSize[int](20),
-		page.WithTotalCount[int](100),
 		page.WithNextPageLoaderWithNewTotal[int](myLoader),
 	)
 
