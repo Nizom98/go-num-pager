@@ -11,11 +11,6 @@ If you know the total number of pages.
 ```go
 package main
 
-import (
-	"context"
-	"fmt"
-)
-
 type MyLoader struct{}
 
 func main() {
@@ -39,5 +34,38 @@ func (l *MyLoader) Load(_ context.Context, pageNum, pageSize int) ([]int, error)
 	// TODO: write your own logic to load page result
 	return pageResult, nil
 }
+```
 
+If you don't know the total number of pages.
+
+```go
+package main
+
+type MyLoader struct{}
+
+func main() {
+	myLoader := &MyLoader{}
+
+	pager, _ := page.New[int](
+		page.WithPageSize[int](20),
+		page.WithTotalCount[int](100),
+		page.WithNextPageLoaderWithNewTotal[int](myLoader),
+	)
+
+	result, _ := pager.All(context.Background())
+	fmt.Println(result)
+}
+
+func (l *MyLoader) Load(
+	_ context.Context,
+	pageNum int,
+	pageSize int,
+) (pageResult []int, totalCount int, err error) {
+	body := map[string]interface{}{
+		"limit":    pageSize,
+		"start_at": pageNum,
+	}
+	// TODO: write your own logic to load page result and new total count
+	return pageResult, totalCount, nil
+}
 ```
