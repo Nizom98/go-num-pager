@@ -1,12 +1,24 @@
 # Number pager
 
+-------------------
 Go-Num-Pager is a paginator library for Go.
 It helps you to paginate your data in a simple way.
 This library uses an integer number as the key of a page.
 
 If you want to paginate your data with a **string** key, you can use 
 [go-string-pager](https://github.com/Nizom98/go-string-pager).
+
+## Installation
+
+-------------------
+
+```bash
+go get github.com/Nizom98/go-num-pager
+```
+
 ## Usage
+
+-------------------
 
 If you know the total number of pages.
 
